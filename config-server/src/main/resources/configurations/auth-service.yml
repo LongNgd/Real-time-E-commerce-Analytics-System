@@ -1,13 +1,15 @@
 spring:
   application:
     name: auth-service
-  data:
-    mongodb:
-      host: localhost
-      port: 27017
-      database: authdb
-      username: root
-      password: root
+
+  mongodb:
+    host: ${MONGO_HOST}
+    port: ${MONGO_PORT}
+    database: ${MONGO_DB}
+    username: ${MONGO_USERNAME}
+    password: ${MONGO_PASSWORD}
+    authentication-database: ${MONGO_AUTH_DB}
+
   security:
     oauth2:
       client:
@@ -20,9 +22,12 @@ spring:
               - email
         provider:
           google:
-            authorization-uri: https://accounts.google.com/o/oauth2/auth
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
             token-uri: https://oauth2.googleapis.com/token
             user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+
+jwt:
+  secret: ${JWT_SECRET}
 
 eureka:
   instance:
