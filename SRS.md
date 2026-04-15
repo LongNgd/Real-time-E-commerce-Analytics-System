@@ -143,7 +143,7 @@ MongoDB → Storage
 ## 4.1 Authentication (Auth Service)
 
 FR-1: User Login
-- Input: email, password
+- Login bằng Google OAuth2
 - Output: JWT token
 
 FR-2: Token Validation
