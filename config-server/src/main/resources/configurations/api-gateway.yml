@@ -33,3 +33,6 @@ server:
 eureka:
   client:
     register-with-eureka: false
+
+jwt:
+  secret: ${JWT_SECRET}
