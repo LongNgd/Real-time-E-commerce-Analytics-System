@@ -2,6 +2,14 @@ spring:
   application:
     name: product-service
 
+  mongodb:
+    host: ${MONGO_HOST}
+    port: ${MONGO_PORT}
+    database: ${MONGO_DB}
+    username: ${MONGO_USERNAME}
+    password: ${MONGO_PASSWORD}
+    authentication-database: ${MONGO_AUTH_DB}
+
 eureka:
   instance:
     hostname: localhost
@@ -13,3 +21,11 @@ server:
   port: 8084
   servlet:
     context-path: /api/product
+
+ftp:
+  host: ${FTP_HOST}
+  port: ${FTP_PORT}
+  username: ${FTP_USERNAME}
+  password: ${FTP_PASSWORD}
+  base-path: ${FTP_BASE_PATH}
+  url-prefix: ftp://${ftp.host}:${ftp.port}${ftp.base-path}
