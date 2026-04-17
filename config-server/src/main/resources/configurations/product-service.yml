@@ -10,6 +10,11 @@ spring:
     password: ${MONGO_PASSWORD}
     authentication-database: ${MONGO_AUTH_DB}
 
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
+
 eureka:
   instance:
     hostname: localhost
@@ -28,4 +33,3 @@ ftp:
   username: ${FTP_USERNAME}
   password: ${FTP_PASSWORD}
   base-path: ${FTP_BASE_PATH}
-  url-prefix: ftp://${ftp.host}:${ftp.port}${ftp.base-path}

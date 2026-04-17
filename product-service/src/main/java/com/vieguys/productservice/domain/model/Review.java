@@ -1,4 +1,4 @@
-package com.vieguys.productservice.model;
+package com.vieguys.productservice.domain.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -1,4 +1,4 @@
-package com.vieguys.productservice.model;
+package com.vieguys.productservice.domain.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,10 +10,10 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Data
 @Document(collection = "products")
 public class Product {
 
