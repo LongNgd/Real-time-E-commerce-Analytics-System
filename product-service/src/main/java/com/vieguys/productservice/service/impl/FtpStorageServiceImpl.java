@@ -11,6 +11,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -75,6 +76,24 @@ public class FtpStorageServiceImpl implements FtpStorageService {
                 ftpClient.deleteFile(remotePath);
             }
         } catch (IOException ignored) {
+        } finally {
+            disconnectQuietly(ftpClient);
+        }
+    }
+
+    @Override
+    public byte[] downloadFile(String remotePath) {
+        validateRemotePath(remotePath);
+
+        FTPClient ftpClient = connect();
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            boolean retrieved = ftpClient.retrieveFile(remotePath, outputStream);
+            if (!retrieved) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Image not found");
+            }
+            return outputStream.toByteArray();
+        } catch (IOException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Failed to download image from FTP", exception);
         } finally {
             disconnectQuietly(ftpClient);
         }
@@ -145,6 +164,17 @@ public class FtpStorageServiceImpl implements FtpStorageService {
     private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image file must not be empty");
+        }
+    }
+
+    private void validateRemotePath(String remotePath) {
+        if (!StringUtils.hasText(remotePath)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image path must not be blank");
+        }
+
+        String normalizedPath = remotePath.trim();
+        if (!normalizedPath.startsWith(buildTargetDirectory() + "/")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image path is invalid");
         }
     }
 

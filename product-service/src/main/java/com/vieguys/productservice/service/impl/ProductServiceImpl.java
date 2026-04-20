@@ -1,10 +1,19 @@
 package com.vieguys.productservice.service.impl;
 
+import com.vieguys.productservice.domain.dto.CreateReviewRequestDTO;
+import com.vieguys.productservice.domain.dto.ProductDetailResponseDTO;
+import com.vieguys.productservice.domain.dto.UpdateProductRequestDTO;
 import com.vieguys.productservice.domain.model.Product;
+import com.vieguys.productservice.domain.model.Review;
 import com.vieguys.productservice.repository.ProductRepository;
+import com.vieguys.productservice.repository.ReviewRepository;
 import com.vieguys.productservice.service.FtpStorageService;
 import com.vieguys.productservice.service.ProductService;
+import com.vieguys.productservice.utils.CommonUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -12,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -19,7 +29,175 @@ import java.util.List;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final ReviewRepository reviewRepository;
     private final FtpStorageService ftpStorageService;
+
+    @Override
+    public Page<Product> getProducts(int page, int size, String sortBy, String direction) {
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must be greater than or equal to 0");
+        }
+        if (size <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Size must be greater than 0");
+        }
+        if (!StringUtils.hasText(sortBy)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sort field must not be blank");
+        }
+
+        Sort.Direction sortDirection;
+        try {
+            sortDirection = Sort.Direction.fromString(direction);
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Direction must be asc or desc", exception);
+        }
+
+        return productRepository.findAll(PageRequest.of(page, size, Sort.by(sortDirection, sortBy)));
+    }
+
+    @Override
+    public ProductDetailResponseDTO getProductDetail(String productId, int page, int size) {
+        validatePagination(page, size, "createdAt", "desc");
+
+        Product product = ensureProductExists(productId);
+        Page<Review> reviewPage = reviewRepository.findByProductId(
+                productId,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+
+        return ProductDetailResponseDTO.builder()
+                .product(CommonUtils.toProductResponse(product))
+                .reviews(reviewPage.getContent())
+                .page(reviewPage.getNumber())
+                .size(reviewPage.getSize())
+                .totalElements(reviewPage.getTotalElements())
+                .totalPages(reviewPage.getTotalPages())
+                .hasNext(reviewPage.hasNext())
+                .hasPrevious(reviewPage.hasPrevious())
+                .build();
+    }
+
+    @Override
+    public Product getProductById(String productId) {
+        if (!StringUtils.hasText(productId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
+        }
+
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+    }
+
+    @Override
+    public void deleteProduct(String productId) {
+        if (!StringUtils.hasText(productId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
+        }
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        List<String> imagePaths = product.getImageUrls() == null ? List.of() : List.copyOf(product.getImageUrls());
+
+        try {
+            reviewRepository.deleteByProductId(productId);
+            productRepository.delete(product);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete product", exception);
+        }
+
+        ftpStorageService.deleteFiles(imagePaths);
+    }
+
+    @Override
+    public Product updateProduct(String productId, UpdateProductRequestDTO request) {
+        if (!StringUtils.hasText(productId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
+        }
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Update request must not be empty");
+        }
+        validateProductRequest(request.getName(), request.getPrice(), request.getStock());
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        String normalizedName = request.getName().trim();
+        if (!product.getName().equalsIgnoreCase(normalizedName)
+                && productRepository.existsByNameIgnoreCase(normalizedName)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Product name already exists");
+        }
+
+        product.setName(normalizedName);
+        product.setDescription(request.getDescription());
+        product.setPrice(request.getPrice());
+        product.setStock(request.getStock());
+        product.setUpdatedAt(LocalDateTime.now());
+
+        return productRepository.save(product);
+    }
+
+    @Override
+    public Product addProductImages(String productId, List<MultipartFile> images) {
+        if (!StringUtils.hasText(productId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
+        }
+        if (images == null || images.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product images must not be empty");
+        }
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        List<String> uploadedImagePaths = ftpStorageService.uploadFiles(images);
+        List<String> updatedImagePaths = new ArrayList<>();
+        if (product.getImageUrls() != null) {
+            updatedImagePaths.addAll(product.getImageUrls());
+        }
+        updatedImagePaths.addAll(uploadedImagePaths);
+
+        product.setImageUrls(updatedImagePaths);
+        product.setUpdatedAt(LocalDateTime.now());
+
+        try {
+            return productRepository.save(product);
+        } catch (RuntimeException exception) {
+            ftpStorageService.deleteFiles(uploadedImagePaths);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to add product images", exception);
+        }
+    }
+
+    @Override
+    public Product removeProductImages(String productId, List<String> imagePaths) {
+        if (!StringUtils.hasText(productId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
+        }
+        if (imagePaths == null || imagePaths.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image paths must not be empty");
+        }
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        List<String> currentImagePaths = product.getImageUrls() == null
+                ? List.of()
+                : new ArrayList<>(product.getImageUrls());
+
+        for (String imagePath : imagePaths) {
+            if (!StringUtils.hasText(imagePath) || !currentImagePaths.contains(imagePath)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image path does not belong to product");
+            }
+        }
+
+        if (currentImagePaths.size() == imagePaths.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product must keep at least one image");
+        }
+
+        currentImagePaths.removeAll(imagePaths);
+        ftpStorageService.deleteFiles(imagePaths);
+
+        product.setImageUrls(currentImagePaths);
+        product.setUpdatedAt(LocalDateTime.now());
+        return productRepository.save(product);
+    }
 
     @Override
     public Product createProduct(
@@ -29,7 +207,7 @@ public class ProductServiceImpl implements ProductService {
             Integer stock,
             List<MultipartFile> images
     ) {
-        validateRequest(name, price, stock, images);
+        validateCreateProductRequest(name, price, stock, images);
 
         String normalizedName = name.trim();
         if (productRepository.existsByNameIgnoreCase(normalizedName)) {
@@ -58,7 +236,56 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    private void validateRequest(String name, Double price, Integer stock, List<MultipartFile> images) {
+    @Override
+    public Page<Review> getProductReviews(String productId, int page, int size, String sortBy, String direction) {
+        validatePagination(page, size, sortBy, direction);
+        ensureProductExists(productId);
+
+        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+        return reviewRepository.findByProductId(productId, PageRequest.of(page, size, Sort.by(sortDirection, sortBy)));
+    }
+
+    @Override
+    public Review createReview(String productId, CreateReviewRequestDTO request, String userEmail, String userName) {
+        validateReviewRequest(productId, request, userEmail, userName);
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+
+        if (reviewRepository.existsByProductIdAndUserEmail(productId, userEmail.trim())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "You have already reviewed this product");
+        }
+
+        Review review = Review.builder()
+                .productId(productId)
+                .userEmail(userEmail.trim())
+                .userName(userName.trim())
+                .content(request.getContent().trim())
+                .rating(request.getRating())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        Review savedReview = reviewRepository.save(review);
+        try {
+            updateProductRating(product);
+            return savedReview;
+        } catch (RuntimeException exception) {
+            reviewRepository.deleteById(savedReview.getId());
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create review", exception);
+        }
+    }
+
+    private void validateCreateProductRequest(String name, Double price, Integer stock, List<MultipartFile> images) {
+        validateProductRequest(name, price, stock);
+        if (!StringUtils.hasText(name)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product name must not be blank");
+        }
+        if (images == null || images.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product images must not be empty");
+        }
+    }
+
+    private void validateProductRequest(String name, Double price, Integer stock) {
         if (!StringUtils.hasText(name)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product name must not be blank");
         }
@@ -68,8 +295,65 @@ public class ProductServiceImpl implements ProductService {
         if (stock == null || stock < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product stock must be greater than or equal to 0");
         }
-        if (images == null || images.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product images must not be empty");
+    }
+
+    private void validateReviewRequest(
+            String productId,
+            CreateReviewRequestDTO request,
+            String userEmail,
+            String userName
+    ) {
+        if (!StringUtils.hasText(productId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
         }
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Review request must not be empty");
+        }
+        if (!StringUtils.hasText(request.getContent())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Review content must not be blank");
+        }
+        if (request.getRating() == null || request.getRating() < 1 || request.getRating() > 5) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Review rating must be between 1 and 5");
+        }
+        if (!StringUtils.hasText(userEmail)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User email is missing");
+        }
+        if (!StringUtils.hasText(userName)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User name is missing");
+        }
+    }
+
+    private void validatePagination(int page, int size, String sortBy, String direction) {
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must be greater than or equal to 0");
+        }
+        if (size <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Size must be greater than 0");
+        }
+        if (!StringUtils.hasText(sortBy)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sort field must not be blank");
+        }
+        try {
+            Sort.Direction.fromString(direction);
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Direction must be asc or desc", exception);
+        }
+    }
+
+    private Product ensureProductExists(String productId) {
+        if (!StringUtils.hasText(productId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
+        }
+
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+    }
+
+    private void updateProductRating(Product product) {
+        List<Review> reviews = reviewRepository.findByProductId(product.getId());
+        product.setTotalReviews(reviews.size());
+        product.setAverageRating(reviews.stream().mapToInt(Review::getRating).average().orElse(0.0));
+        product.setUpdatedAt(LocalDateTime.now());
+        productRepository.save(product);
     }
 }
