@@ -36,12 +36,22 @@ public class JwtService {
         }
     }
 
-    public String extractUsername(String token) {
+    public String extractUserId(String token) {
         return extractAllClaims(token).getSubject();
     }
 
     public String extractRole(String token) {
         Object role = extractAllClaims(token).get("role");
         return role == null ? null : role.toString();
+    }
+
+    public String extractUserEmail(String token) {
+        Object userEmail = extractAllClaims(token).get("userEmail");
+        return userEmail == null ? null : userEmail.toString();
+    }
+
+    public String extractUserName(String token) {
+        Object userName = extractAllClaims(token).get("userName");
+        return userName == null ? null : userName.toString();
     }
 }
