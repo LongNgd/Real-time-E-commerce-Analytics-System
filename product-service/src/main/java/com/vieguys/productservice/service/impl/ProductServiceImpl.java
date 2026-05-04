@@ -11,6 +11,8 @@ import com.vieguys.productservice.service.FtpStorageService;
 import com.vieguys.productservice.service.ProductService;
 import com.vieguys.productservice.utils.CommonUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,6 +29,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
+
+    private static final String PRODUCT_DETAIL_CACHE = "productDetail";
 
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
@@ -55,24 +59,16 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public ProductDetailResponseDTO getProductDetail(String productId, int page, int size) {
-        validatePagination(page, size, "createdAt", "desc");
-
+    @Cacheable(value = PRODUCT_DETAIL_CACHE, key = "#productId")
+    public ProductDetailResponseDTO getProductDetail(String productId) {
         Product product = ensureProductExists(productId);
-        Page<Review> reviewPage = reviewRepository.findByProductId(
-                productId,
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
-        );
+        List<Review> reviews = reviewRepository.findByProductId(productId).stream()
+                .sorted((left, right) -> right.getCreatedAt().compareTo(left.getCreatedAt()))
+                .toList();
 
         return ProductDetailResponseDTO.builder()
                 .product(CommonUtils.toProductResponse(product))
-                .reviews(reviewPage.getContent())
-                .page(reviewPage.getNumber())
-                .size(reviewPage.getSize())
-                .totalElements(reviewPage.getTotalElements())
-                .totalPages(reviewPage.getTotalPages())
-                .hasNext(reviewPage.hasNext())
-                .hasPrevious(reviewPage.hasPrevious())
+                .reviews(reviews)
                 .build();
     }
 
@@ -87,6 +83,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
     public void deleteProduct(String productId) {
         if (!StringUtils.hasText(productId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
@@ -108,6 +105,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
     public Product updateProduct(String productId, UpdateProductRequestDTO request) {
         if (!StringUtils.hasText(productId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
@@ -136,6 +134,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
     public Product addProductImages(String productId, List<MultipartFile> images) {
         if (!StringUtils.hasText(productId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
@@ -166,6 +165,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
     public Product removeProductImages(String productId, List<String> imagePaths) {
         if (!StringUtils.hasText(productId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
@@ -200,6 +200,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
     public Product createProduct(
             String name,
             String description,
@@ -246,7 +247,8 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Review createReview(String productId, CreateReviewRequestDTO request, String userEmail, String userName) {
+    @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
+    public void createReview(String productId, CreateReviewRequestDTO request, String userEmail, String userName) {
         validateReviewRequest(productId, request, userEmail, userName);
 
         Product product = productRepository.findById(productId)
@@ -268,7 +270,6 @@ public class ProductServiceImpl implements ProductService {
         Review savedReview = reviewRepository.save(review);
         try {
             updateProductRating(product);
-            return savedReview;
         } catch (RuntimeException exception) {
             reviewRepository.deleteById(savedReview.getId());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create review", exception);

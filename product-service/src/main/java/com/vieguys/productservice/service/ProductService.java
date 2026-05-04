@@ -13,7 +13,7 @@ import java.util.List;
 public interface ProductService {
     Page<Product> getProducts(int page, int size, String sortBy, String direction);
 
-    ProductDetailResponseDTO getProductDetail(String productId, int page, int size);
+    ProductDetailResponseDTO getProductDetail(String productId);
 
     Product getProductById(String productId);
 
@@ -35,5 +35,5 @@ public interface ProductService {
 
     Page<Review> getProductReviews(String productId, int page, int size, String sortBy, String direction);
 
-    Review createReview(String productId, CreateReviewRequestDTO request, String userEmail, String userName);
+    void createReview(String productId, CreateReviewRequestDTO request, String userEmail, String userName);
 }

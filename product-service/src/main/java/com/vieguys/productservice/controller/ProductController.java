@@ -2,7 +2,6 @@ package com.vieguys.productservice.controller;
 
 import com.vieguys.productservice.domain.dto.CreateReviewRequestDTO;
 import com.vieguys.productservice.domain.dto.ProductDetailResponseDTO;
-import com.vieguys.productservice.domain.dto.ProductResponseDTO;
 import com.vieguys.productservice.domain.dto.RemoveProductImagesRequestDTO;
 import com.vieguys.productservice.domain.dto.UpdateProductRequestDTO;
 import com.vieguys.productservice.domain.model.Product;
@@ -37,32 +36,28 @@ public class ProductController {
     private final ProductService productService;
     private final FtpStorageService ftpStorageService;
 
-    @GetMapping
-    public ResponseEntity<Page<ProductResponseDTO>> getProducts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "createdAt") String sort,
-            @RequestParam(defaultValue = "desc") String direction
-    ) {
-        Page<ProductResponseDTO> products = productService.getProducts(page, size, sort, direction)
-                .map(CommonUtils::toProductResponse);
-        return ResponseEntity.ok(products);
-    }
+//    @GetMapping
+//    public ResponseEntity<Page<ProductResponseDTO>> getProducts(
+//            @RequestParam(defaultValue = "0") int page,
+//            @RequestParam(defaultValue = "10") int size,
+//            @RequestParam(defaultValue = "createdAt") String sort,
+//            @RequestParam(defaultValue = "desc") String direction
+//    ) {
+//        Page<ProductResponseDTO> products = productService.getProducts(page, size, sort, direction)
+//                .map(CommonUtils::toProductResponse);
+//        return ResponseEntity.ok(products);
+//    }
 
     @GetMapping(path = "/{id}/detail")
-    public ResponseEntity<ProductDetailResponseDTO> getProductDetail(
-            @PathVariable String id,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        return ResponseEntity.ok(productService.getProductDetail(id, page, size));
+    public ResponseEntity<ProductDetailResponseDTO> getProductDetail(@PathVariable String id) {
+        return ResponseEntity.ok(productService.getProductDetail(id));
     }
 
-    @GetMapping(path = "/{id}")
-    public ResponseEntity<ProductResponseDTO> getProductById(@PathVariable String id) {
-        Product product = productService.getProductById(id);
-        return ResponseEntity.ok(CommonUtils.toProductResponse(product));
-    }
+//    @GetMapping(path = "/{id}")
+//    public ResponseEntity<ProductResponseDTO> getProductById(@PathVariable String id) {
+//        Product product = productService.getProductById(id);
+//        return ResponseEntity.ok(CommonUtils.toProductResponse(product));
+//    }
 
     @DeleteMapping(path = "/{id}")
     public ResponseEntity<Void> deleteProduct(@PathVariable String id) {
@@ -71,30 +66,30 @@ public class ProductController {
     }
 
     @PutMapping(path = "/{id}")
-    public ResponseEntity<ProductResponseDTO> updateProduct(
+    public ResponseEntity<ProductDetailResponseDTO> updateProduct(
             @PathVariable String id,
             @RequestBody UpdateProductRequestDTO request
     ) {
         Product product = productService.updateProduct(id, request);
-        return ResponseEntity.ok(CommonUtils.toProductResponse(product));
+        return ResponseEntity.ok(CommonUtils.toProductDetailResponse(product));
     }
 
     @PostMapping(path = "/{id}/images", consumes = "multipart/form-data")
-    public ResponseEntity<ProductResponseDTO> addProductImages(
+    public ResponseEntity<ProductDetailResponseDTO> addProductImages(
             @PathVariable String id,
             @RequestParam List<MultipartFile> images
     ) {
         Product product = productService.addProductImages(id, images);
-        return ResponseEntity.ok(CommonUtils.toProductResponse(product));
+        return ResponseEntity.ok(CommonUtils.toProductDetailResponse(product));
     }
 
     @DeleteMapping(path = "/{id}/images")
-    public ResponseEntity<ProductResponseDTO> removeProductImages(
+    public ResponseEntity<ProductDetailResponseDTO> removeProductImages(
             @PathVariable String id,
             @RequestBody RemoveProductImagesRequestDTO request
     ) {
         Product product = productService.removeProductImages(id, request.getImagePaths());
-        return ResponseEntity.ok(CommonUtils.toProductResponse(product));
+        return ResponseEntity.ok(CommonUtils.toProductDetailResponse(product));
     }
 
     @GetMapping(path = "/images")
@@ -106,7 +101,7 @@ public class ProductController {
     }
 
     @PostMapping(path = "/create", consumes = "multipart/form-data")
-    public ResponseEntity<ProductResponseDTO> createProduct(
+    public ResponseEntity<ProductDetailResponseDTO> createProduct(
             @RequestParam String name,
             @RequestParam(required = false) String description,
             @RequestParam Double price,
@@ -114,28 +109,28 @@ public class ProductController {
             @RequestParam List<MultipartFile> images
     ) {
         Product product = productService.createProduct(name, description, price, stock, images);
-        return ResponseEntity.status(HttpStatus.CREATED).body(CommonUtils.toProductResponse(product));
+        return ResponseEntity.status(HttpStatus.CREATED).body(CommonUtils.toProductDetailResponse(product));
     }
 
-    @GetMapping(path = "/{productId}/review")
-    public ResponseEntity<Page<Review>> getProductReviews(
-            @PathVariable String productId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "createdAt") String sort,
-            @RequestParam(defaultValue = "desc") String direction
-    ) {
-        return ResponseEntity.ok(productService.getProductReviews(productId, page, size, sort, direction));
-    }
+//    @GetMapping(path = "/{productId}/review")
+//    public ResponseEntity<Page<Review>> getProductReviews(
+//            @PathVariable String productId,
+//            @RequestParam(defaultValue = "0") int page,
+//            @RequestParam(defaultValue = "10") int size,
+//            @RequestParam(defaultValue = "createdAt") String sort,
+//            @RequestParam(defaultValue = "desc") String direction
+//    ) {
+//        return ResponseEntity.ok(productService.getProductReviews(productId, page, size, sort, direction));
+//    }
 
     @PostMapping(path = "/{id}/review")
-    public ResponseEntity<Review> createReview(
+    public ResponseEntity<ProductDetailResponseDTO> createReview(
             @PathVariable String id,
             @RequestBody CreateReviewRequestDTO request,
             @RequestHeader("X-User-Email") String userEmail,
             @RequestHeader("X-User-Name") String userName
     ) {
-        Review review = productService.createReview(id, request, userEmail, userName);
-        return ResponseEntity.status(HttpStatus.CREATED).body(review);
+        productService.createReview(id, request, userEmail, userName);
+        return ResponseEntity.status(HttpStatus.CREATED).body(productService.getProductDetail(id));
     }
 }

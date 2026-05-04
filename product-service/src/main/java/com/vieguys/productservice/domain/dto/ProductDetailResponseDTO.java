@@ -15,10 +15,4 @@ import java.util.List;
 public class ProductDetailResponseDTO {
     private ProductResponseDTO product;
     private List<Review> reviews;
-    private int page;
-    private int size;
-    private long totalElements;
-    private int totalPages;
-    private boolean hasNext;
-    private boolean hasPrevious;
 }
