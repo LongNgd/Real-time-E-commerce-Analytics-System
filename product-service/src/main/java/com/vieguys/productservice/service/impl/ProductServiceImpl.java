@@ -73,16 +73,6 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Product getProductById(String productId) {
-        if (!StringUtils.hasText(productId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product id must not be blank");
-        }
-
-        return productRepository.findById(productId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
-    }
-
-    @Override
     @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
     public void deleteProduct(String productId) {
         if (!StringUtils.hasText(productId)) {
@@ -238,15 +228,6 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Page<Review> getProductReviews(String productId, int page, int size, String sortBy, String direction) {
-        validatePagination(page, size, sortBy, direction);
-        ensureProductExists(productId);
-
-        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
-        return reviewRepository.findByProductId(productId, PageRequest.of(page, size, Sort.by(sortDirection, sortBy)));
-    }
-
-    @Override
     @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
     public void createReview(String productId, CreateReviewRequestDTO request, String userEmail, String userName) {
         validateReviewRequest(productId, request, userEmail, userName);
@@ -274,6 +255,28 @@ public class ProductServiceImpl implements ProductService {
             reviewRepository.deleteById(savedReview.getId());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create review", exception);
         }
+    }
+
+    @Override
+    @CacheEvict(value = PRODUCT_DETAIL_CACHE, allEntries = true)
+    public void deleteReview(String productId, String reviewId, String userEmail) {
+        if (!StringUtils.hasText(reviewId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Review id must not be blank");
+        }
+        if (!StringUtils.hasText(userEmail)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User email is missing");
+        }
+
+        Product product = ensureProductExists(productId);
+        String normalizedUserEmail = userEmail.trim();
+        String normalizedReviewId = reviewId.trim();
+
+        if (!reviewRepository.existsByIdAndProductIdAndUserEmail(normalizedReviewId, productId, normalizedUserEmail)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Review not found");
+        }
+
+        reviewRepository.deleteById(normalizedReviewId);
+        updateProductRating(product);
     }
 
     private void validateCreateProductRequest(String name, Double price, Integer stock, List<MultipartFile> images) {

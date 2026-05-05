@@ -4,7 +4,6 @@ import com.vieguys.productservice.domain.dto.CreateReviewRequestDTO;
 import com.vieguys.productservice.domain.dto.ProductDetailResponseDTO;
 import com.vieguys.productservice.domain.dto.UpdateProductRequestDTO;
 import com.vieguys.productservice.domain.model.Product;
-import com.vieguys.productservice.domain.model.Review;
 import org.springframework.data.domain.Page;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,8 +13,6 @@ public interface ProductService {
     Page<Product> getProducts(int page, int size, String sortBy, String direction);
 
     ProductDetailResponseDTO getProductDetail(String productId);
-
-    Product getProductById(String productId);
 
     void deleteProduct(String productId);
 
@@ -33,7 +30,7 @@ public interface ProductService {
             List<MultipartFile> images
     );
 
-    Page<Review> getProductReviews(String productId, int page, int size, String sortBy, String direction);
-
     void createReview(String productId, CreateReviewRequestDTO request, String userEmail, String userName);
+
+    void deleteReview(String productId, String reviewId, String userEmail);
 }

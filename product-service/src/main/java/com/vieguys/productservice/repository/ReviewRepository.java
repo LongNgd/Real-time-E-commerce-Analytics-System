@@ -1,8 +1,6 @@
 package com.vieguys.productservice.repository;
 
 import com.vieguys.productservice.domain.model.Review;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -12,7 +10,7 @@ import java.util.List;
 public interface ReviewRepository extends MongoRepository<Review, String> {
     boolean existsByProductIdAndUserEmail(String productId, String userEmail);
 
-    Page<Review> findByProductId(String productId, Pageable pageable);
+    boolean existsByIdAndProductIdAndUserEmail(String id, String productId, String userEmail);
 
     List<Review> findByProductId(String productId);
 

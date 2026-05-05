@@ -1,6 +1,5 @@
 package com.vieguys.productservice.utils;
 
-import com.vieguys.productservice.domain.dto.ProductDetailResponseDTO;
 import com.vieguys.productservice.domain.dto.ProductResponseDTO;
 import com.vieguys.productservice.domain.model.Product;
 import org.springframework.http.MediaType;
@@ -28,13 +27,6 @@ public final class CommonUtils {
                 .totalReviews(product.getTotalReviews())
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
-                .build();
-    }
-
-    public static ProductDetailResponseDTO toProductDetailResponse(Product product) {
-        return ProductDetailResponseDTO.builder()
-                .product(toProductResponse(product))
-                .reviews(List.of())
                 .build();
     }
 
